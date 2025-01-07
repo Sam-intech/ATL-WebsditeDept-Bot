@@ -1,13 +1,16 @@
 # Importations
 from typing import final
-from telegram import Bot
-from telegram import Update
+from telegram import Bot, Update
+# from telegram import Update
 from telegram.ext import Updater, CommandHandler, MessageHandler, filters, ContextTypes, Application
-# import schedule
+from datetime import datetime, timedelta, time as dt_time
+# from datetime import datetime, timezone, timedelta
+import pytz
+import schedule
 # import time
-# import threading
-# from datetime import datetime
-# import pytz
+import threading
+from apscheduler.schedulers.background import BackgroundScheduler
+
 
 # importation ends here
 # -----========================================================-----
@@ -39,40 +42,49 @@ members = [
 # Define teams with members, leaders, and meeting links
 teams_data = {
     "Leadership Team": {
-        "leader": [members['name'] for member in members if member['leader'] ==  True],
+        "leader": [member['name'] for member in members if member['leader'] ==  True],
         "members": [member['name'] for member in members if member['teamlead'] == True or member['leader'] == True],
         "meeting_link": "https://meet.google.com/ohw-juya-xxd",
-        "meeting-time": "First Friday of the month (8pm - UTC+01:00)"
+        # "meeting-time": "First Friday of the month (8pm - UTC+01:00)"
+        "meeting_time": (datetime.now(pytz.timezone('Africa/Lagos')) + timedelta(seconds=5)).time(),  # Testing: 15 mins from now
+        "group_topic_id": 100  # Example topic ID
+
+
     },
     "Design Team": {
         "leader": [member['name'] for member in members if member['team'] == "Design Team" and member['teamlead'] == True],
         "members": [member['name'] for member in members if member['team'] == "Design Team"],
         "meeting_link": "https://meet.google.com/rfb-cogx-nwv",
-        "meeting-time": "Every Last Saturday of the Month (7pm - UTC+01:00)"
+        "meeting_time": datetime.now(pytz.timezone('Africa/Lagos')).time(),  # Example time
+        # "group_topic_id": 
     },
     "Development Team": {
         "leader": [member['name'] for member in members if member['team'] == "Development Team" and member['teamlead'] == True],
         "members": [member['name'] for member in members if member['team'] == "Development Team"],
         "meeting_link": "https://meet.google.com/nux-bfvh-gvf",
-        "meeting-time": "Every Last Saturday of the Month (8pm - UTC+01:00)"
+        "meeting_time": datetime.now(pytz.timezone('Africa/Lagos')).time(),  # Example time
+        # "group_topic_id": 
     },
     "SEO/Content Writing Team": {
         "leader": [member['name'] for member in members if member['team'] == "SEO/Content Writing Team" and member['teamlead'] == True],
         "members": [member['name'] for member in members if member['team'] == "SEO/Content Writing Team"],
         "meeting_link": "https://meet.google.com/fzb-dejs-mtm",
-        "meeting-time": "Meeting time is not set yet"
+        "meeting_time": datetime.now(pytz.timezone('Africa/Lagos')).time(),  # Example time
+        # "group_topic_id": 
     },
     "Support Team": {
         "leader": [member['name'] for member in members if member['team'] == "Support Team" and member['teamlead'] == True],
         "members": [member['name'] for member in members if member['team'] == "Support Team"],
         "meeting_link": "Meeting link not set yet",
-        "meeting-time": "Meeting time is not set yet"
+        "meeting_time": datetime.now(pytz.timezone('Africa/Lagos')).time(),  # Example time
+        # "group_topic_id": 
     },
     "Database Team": {
         "leader": [member['name'] for member in members if member['team'] == "Database Team" and member['teamlead'] == True],
         "members": [member['name'] for member in members if member['team'] == "Database Team"],
         "meeting_link": "Meeting link not set yet",
-        "meeting-time": "meeting time is not set yet"
+        "meeting_time": datetime.now(pytz.timezone('Africa/Lagos')).time(),  # Example time
+        # "group_topic_id":
     }
 }
 
@@ -117,6 +129,15 @@ def generate_teams_message() -> str:
         teams_message += f"{team} - {lead} (Leader) \n"
     return teams_message.strip()
 
+
+async def list_topics(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id = update.message.chat_id
+    topics = await context.bot.get_forum_topics(chat_id)
+    for topic in topics:
+        print(f"Topic Name: {topic.name}, Topic ID: {topic.message_thread_id}")
+        await update.message.reply_text(
+            f"Topic: {topic.name}, ID: {topic.message_thread_id}"
+        )
 
 
 
@@ -284,16 +305,91 @@ async def error(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 # ------------====================================================================================-----------------
+# scheduling meeting
+def schedule_reminders(bot, job_queue):
+    nigeria_tz = pytz.timezone('Africa/Lagos')
+
+    for team, data in teams_data.items():
+        print(f"Processing team: {team}, Data: {data}")
+
+        meeting_time = data.get("meeting_time")
+        if not meeting_time:
+            print(f"Skipping team {team} due to missing 'meeting_time'")
+            continue
+
+        # Handle both string and datetime.time types
+        if isinstance(data["meeting_time"], dt_time):  # Use 'time' directly
+            meeting_time = datetime.now(nigeria_tz).replace(
+                hour=data["meeting_time"].hour,
+                minute=data["meeting_time"].minute,
+                second=0,
+                microsecond=0,
+            )
+        elif isinstance(data["meeting_time"], str):
+            meeting_time = datetime.strptime(data["meeting_time"], "%H:%M").replace(
+                year=datetime.now().year,
+                month=datetime.now().month,
+                day=datetime.now().day,
+                tzinfo=nigeria_tz,
+            )
+        else:
+            print(f"Unsupported meeting_time format for team: {team}")
+            continue
+
+        # Schedule reminders
+        reminders = [
+            ("1 week before", meeting_time - timedelta(days=7)),
+            ("2 days before", meeting_time - timedelta(days=2)),
+            ("24 hours before", meeting_time - timedelta(hours=24)),
+            ("5 hours before", meeting_time - timedelta(hours=5)),
+        ]
+
+        for desc, reminder_time in reminders:
+            if reminder_time > datetime.now(nigeria_tz):  # Only schedule future reminders
+                job_queue.run_once(
+                    send_reminder,
+                    when=(reminder_time - datetime.now(nigeria_tz)).total_seconds(),
+                    context={"team": team, "data": data},
+                    name=f"{team}_{desc}",
+                )
+
+
+
+# Send reminder message
+async def send_reminder(context: ContextTypes.DEFAULT_TYPE):
+    team = context.job.context["team"]
+    data = context.job.context["data"]
+
+    mentions = " ".join([f"@{member}" for member in data["members"]])
+    message = (
+        f"🚨 Reminder for {team} Meeting 🚨\n\n"
+        f"Meeting Link: {data['meeting_link']}\n"
+        f"Time: {data['meeting_time']}\n\n"
+        f"Team Members: {mentions}"
+    )
+
+    await context.bot.send_message(
+        chat_id="-1001898213670",  # Replace with actual group chat ID
+        text=message,
+        message_thread_id=data["group_topic_id"]
+    )
+
 # sending meeting reminders to team leads
 # def send_reminder(context):
-#     context.bot.send_message(chat_id='YOUR_GROUP_CHAT_ID', text="Reminder: Team leaders, please prepare for the meeting!")
+#     team_leads_names = [member['name'] for member in members if member['teamlead']]
+#     team_leads_mentions = " ".join([f"@{member['username'][1:]}" for member in members if member['teamlead']])  # Remove '@' for mention
+#     message = f"MEETING TIME 🚨\n\n\nDear Team leads\n{team_leads_mentions}\nKindly join the meeting! \n\nHere is a link to the meeting: {teams_data['Leadership Team']['meeting_link']}"
+#     context.bot.send_message(chat_id='YOUR_GROUP_CHAT_ID', text=message)
 
 # def schedule_reminders():
 #     # Set timezone to Nigeria
 #     nigeria_tz = pytz.timezone('Africa/Lagos')
     
-#     # Schedule the reminder for the first Friday of every month at 8 PM
-#     schedule.every().month.at("20:00").do(send_reminder)
+#     # Calculate the time for the next reminder (15 minutes from now)
+#     reminder_time = datetime.now(nigeria_tz) + timedelta(minutes=15)
+
+#     # Schedule the reminder
+#     schedule.every().day.at(reminder_time.strftime("%H:%M")).do(send_reminder)  # Send reminder at the calculated time
 
 #     while True:
 #         schedule.run_pending()
@@ -313,6 +409,9 @@ async def error(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 #     updater.start_polling()
 #     updater.idle()
+
+
+
 
 
 
@@ -339,8 +438,17 @@ if __name__ == '__main__':
     app.add_handler(MessageHandler(filters.TEXT, handle_messages))
 
 
+    app.add_handler(CommandHandler("list_topics", list_topics))
+
+
     # error
     app.add_error_handler(error)
+
+
+    # Schedule reminders
+    scheduler = BackgroundScheduler()
+    scheduler.start()
+    schedule_reminders(app.bot, app.job_queue)
 
 
     # polling the pot
