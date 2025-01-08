@@ -47,7 +47,7 @@ teams_data = {
         "meeting_link": "https://meet.google.com/ohw-juya-xxd",
         # "meeting-time": "First Friday of the month (8pm - UTC+01:00)"
         "meeting_time": (datetime.now(pytz.timezone('Africa/Lagos')) + timedelta(seconds=5)).time(),  # Testing: 15 mins from now
-        "group_topic_id": 100  # Example topic ID
+        "team_topic_id": 5043  # Example topic ID
 
 
     },
@@ -56,35 +56,35 @@ teams_data = {
         "members": [member['name'] for member in members if member['team'] == "Design Team"],
         "meeting_link": "https://meet.google.com/rfb-cogx-nwv",
         "meeting_time": datetime.now(pytz.timezone('Africa/Lagos')).time(),  # Example time
-        # "group_topic_id": 
+        "team_topic_id": 4914
     },
     "Development Team": {
         "leader": [member['name'] for member in members if member['team'] == "Development Team" and member['teamlead'] == True],
         "members": [member['name'] for member in members if member['team'] == "Development Team"],
         "meeting_link": "https://meet.google.com/nux-bfvh-gvf",
         "meeting_time": datetime.now(pytz.timezone('Africa/Lagos')).time(),  # Example time
-        # "group_topic_id": 
+        "team_topic_id": 4934 
     },
     "SEO/Content Writing Team": {
         "leader": [member['name'] for member in members if member['team'] == "SEO/Content Writing Team" and member['teamlead'] == True],
         "members": [member['name'] for member in members if member['team'] == "SEO/Content Writing Team"],
         "meeting_link": "https://meet.google.com/fzb-dejs-mtm",
         "meeting_time": datetime.now(pytz.timezone('Africa/Lagos')).time(),  # Example time
-        # "group_topic_id": 
+        "team_topic_id": 4936 
     },
     "Support Team": {
         "leader": [member['name'] for member in members if member['team'] == "Support Team" and member['teamlead'] == True],
         "members": [member['name'] for member in members if member['team'] == "Support Team"],
         "meeting_link": "Meeting link not set yet",
         "meeting_time": datetime.now(pytz.timezone('Africa/Lagos')).time(),  # Example time
-        # "group_topic_id": 
+        "team_topic_id": 4911 
     },
     "Database Team": {
         "leader": [member['name'] for member in members if member['team'] == "Database Team" and member['teamlead'] == True],
         "members": [member['name'] for member in members if member['team'] == "Database Team"],
         "meeting_link": "Meeting link not set yet",
         "meeting_time": datetime.now(pytz.timezone('Africa/Lagos')).time(),  # Example time
-        # "group_topic_id":
+        "team_topic_id": 4901
     }
 }
 
@@ -130,15 +130,6 @@ def generate_teams_message() -> str:
     return teams_message.strip()
 
 
-async def list_topics(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    chat_id = update.message.chat_id
-    topics = await context.bot.get_forum_topics(chat_id)
-    for topic in topics:
-        print(f"Topic Name: {topic.name}, Topic ID: {topic.message_thread_id}")
-        await update.message.reply_text(
-            f"Topic: {topic.name}, ID: {topic.message_thread_id}"
-        )
-
 
 
 # --------====================================================----------
@@ -171,6 +162,32 @@ async def members_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # membersMessage = "MEMBERS LIST \n\nStill Compiling..."
     await update.message.reply_text(membersMessage)
 
+
+async def topics_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id = update.message.chat_id
+    
+    try:
+        # Fetch chat details
+        chat = await context.bot.get_chat(chat_id)
+        
+        if not chat.is_forum:
+            await update.message.reply_text("This chat does not support topics.")
+            return
+
+        # List topics
+        topics = chat.forum_topics
+        if not topics:
+            await update.message.reply_text("No topics found in this group.")
+            return
+
+        response = "Group Topics:\n"
+        for topic in topics:
+            response += f"Topic Name: {topic.name}, Topic ID: {topic.message_thread_id}\n"
+            print(f"Topic Name: {topic.name}, Topic ID: {topic.message_thread_id}")
+        await update.message.reply_text(response)
+    except Exception as e:
+        print(f"Error retrieving topics: {e}")
+        await update.message.reply_text(f"Failed to list topics: {e}")
 
 
 
@@ -265,6 +282,19 @@ def handle_responses(text: str) -> str:
 
 
 
+# -----------------------------------
+async def log_thread_ids(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    message = update.message
+    if message:
+        thread_id = message.message_thread_id
+        print(f"Message received in thread ID: {thread_id}")
+        await update.message.reply_text(f"Thread ID: {thread_id}")
+    else:
+        await update.message.reply_text("No thread ID found in this message.")
+
+
+
+
 
 # ---------------------------
 # handling of messages and send back user either in a group or in private chat
@@ -318,97 +348,82 @@ def schedule_reminders(bot, job_queue):
             continue
 
         # Handle both string and datetime.time types
-        if isinstance(data["meeting_time"], dt_time):  # Use 'time' directly
+        if isinstance(meeting_time, dt_time):  # Use 'time' directly
             meeting_time = datetime.now(nigeria_tz).replace(
-                hour=data["meeting_time"].hour,
-                minute=data["meeting_time"].minute,
+                hour=meeting_time.hour,
+                minute=meeting_time.minute,
                 second=0,
                 microsecond=0,
             )
-        elif isinstance(data["meeting_time"], str):
-            meeting_time = datetime.strptime(data["meeting_time"], "%H:%M").replace(
+        elif isinstance(meeting_time, str):
+            meeting_time = datetime.strptime(meeting_time, "%H:%M").replace(
                 year=datetime.now().year,
                 month=datetime.now().month,
                 day=datetime.now().day,
                 tzinfo=nigeria_tz,
             )
         else:
-            print(f"Unsupported meeting_time format for team: {team}")
+            print(f"Unsupported meeting_time format for team {team}")
             continue
 
-        # Schedule reminders
-        reminders = [
-            ("1 week before", meeting_time - timedelta(days=7)),
-            ("2 days before", meeting_time - timedelta(days=2)),
-            ("24 hours before", meeting_time - timedelta(hours=24)),
-            ("5 hours before", meeting_time - timedelta(hours=5)),
-        ]
+        # Special case: Leadership Team meeting triggers 5 seconds after start
+        if team == "Leadership Team":
+            job_queue.run_once(
+                send_reminder,
+                when=5,  # 5 seconds after starting
+                data={"team": team, "data": data},
+                name=f"{team}_Immediate",
+            )
+        else:
+            # Schedule reminders for other teams
+            reminders = [
+                ("1 week before", meeting_time - timedelta(days=7)),
+                ("2 days before", meeting_time - timedelta(days=2)),
+                ("24 hours before", meeting_time - timedelta(hours=24)),
+                ("5 hours before", meeting_time - timedelta(hours=5)),
+            ]
 
-        for desc, reminder_time in reminders:
-            if reminder_time > datetime.now(nigeria_tz):  # Only schedule future reminders
-                job_queue.run_once(
-                    send_reminder,
-                    when=(reminder_time - datetime.now(nigeria_tz)).total_seconds(),
-                    context={"team": team, "data": data},
-                    name=f"{team}_{desc}",
-                )
+            for desc, reminder_time in reminders:
+                if reminder_time > datetime.now(nigeria_tz):  # Only schedule future reminders
+                    job_queue.run_once(
+                        send_reminder,
+                        when=(reminder_time - datetime.now(nigeria_tz)).total_seconds(),
+                        data={"team": team, "data": data},
+                        name=f"{team}_{desc}",
+                    )
+
 
 
 
 # Send reminder message
 async def send_reminder(context: ContextTypes.DEFAULT_TYPE):
-    team = context.job.context["team"]
-    data = context.job.context["data"]
+    job_data = context.job.data
+    team = job_data["team"]
+    data = job_data["data"]
 
-    mentions = " ".join([f"@{member}" for member in data["members"]])
+    # Tag team members using their Telegram usernames
+    mentions = " ".join(
+        [f"@{member['username'][1:]}" for member in members if member['name'] in data["members"]]
+    )
+
     message = (
-        f"🚨 Reminder for {team} Meeting 🚨\n\n"
-        f"Meeting Link: {data['meeting_link']}\n"
-        f"Time: {data['meeting_time']}\n\n"
-        f"Team Members: {mentions}"
+        f"🚨 ALERT FOR {team} MEETING 🚨\n\n"
+        f"🕒 Time: {data['meeting_time']}\n"
+        f"📅 Meeting Link: {data['meeting_link']}\n\n"
+        f"👥 Attendees: {mentions}"
     )
 
-    await context.bot.send_message(
-        chat_id="-1001898213670",  # Replace with actual group chat ID
-        text=message,
-        message_thread_id=data["group_topic_id"]
-    )
-
-# sending meeting reminders to team leads
-# def send_reminder(context):
-#     team_leads_names = [member['name'] for member in members if member['teamlead']]
-#     team_leads_mentions = " ".join([f"@{member['username'][1:]}" for member in members if member['teamlead']])  # Remove '@' for mention
-#     message = f"MEETING TIME 🚨\n\n\nDear Team leads\n{team_leads_mentions}\nKindly join the meeting! \n\nHere is a link to the meeting: {teams_data['Leadership Team']['meeting_link']}"
-#     context.bot.send_message(chat_id='YOUR_GROUP_CHAT_ID', text=message)
-
-# def schedule_reminders():
-#     # Set timezone to Nigeria
-#     nigeria_tz = pytz.timezone('Africa/Lagos')
-    
-#     # Calculate the time for the next reminder (15 minutes from now)
-#     reminder_time = datetime.now(nigeria_tz) + timedelta(minutes=15)
-
-#     # Schedule the reminder
-#     schedule.every().day.at(reminder_time.strftime("%H:%M")).do(send_reminder)  # Send reminder at the calculated time
-
-#     while True:
-#         schedule.run_pending()
-#         time.sleep(1)
-
-# def start(update, context):
-#     update.message.reply_text("Bot started! Reminders will be sent every first Friday of the month.")
-
-# def main():
-#     updater = Updater(token, use_context=True)
-#     dp = updater.dispatcher
-
-#     dp.add_handler(CommandHandler("start", start))
-
-#     # Start the reminder scheduling in a separate thread
-#     threading.Thread(target=schedule_reminders).start()
-
-#     updater.start_polling()
-#     updater.idle()
+    try:
+        # Send message to the specific topic
+        await context.bot.send_message(
+            chat_id="-1001898213670",  # Replace with your group chat ID
+            text=message,
+            message_thread_id=data["team_topic_id"],  # Send to the specific topic
+            # parse_mode="Markdown",  # Enable bold and formatting
+        )
+        print(f"Reminder sent for {team} meeting in topic {data['team_topic_id']}")
+    except Exception as e:
+        print(f"Failed to send reminder for {team} meeting: {e}")
 
 
 
@@ -432,13 +447,14 @@ if __name__ == '__main__':
     app.add_handler(CommandHandler('meetings', meetings_command))
     app.add_handler(CommandHandler('teams', teams_command))
     app.add_handler(CommandHandler('members', members_command))
+    app.add_handler(CommandHandler('topics', topics_command))
 
 
     # the messages
     app.add_handler(MessageHandler(filters.TEXT, handle_messages))
+    # app.add_handler(CommandHandler("list_topics", list_topics))
+    app.add_handler(MessageHandler(filters.ALL, log_thread_ids))
 
-
-    app.add_handler(CommandHandler("list_topics", list_topics))
 
 
     # error
