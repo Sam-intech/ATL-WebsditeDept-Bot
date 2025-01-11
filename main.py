@@ -16,7 +16,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 # importation ends here
 # -----========================================================-----
 # Bot Api and username 
-TOKEN:final = os.getenv("TELEGRAM_BOT_TOKEN") #Hide the bot token using environment # '8192400793:AAHy4YGrwN7UfTa5r7tHbiXRhINEMKkt8cE'
+TOKEN:final = os.getenv("TELEGRAM_BOT_TOKEN") #Hide the bot token using environment
 BOT_USERNAME:final = '@ATL_WebsiteDept_Bot'
 
 
