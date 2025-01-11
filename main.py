@@ -372,6 +372,14 @@ async def error(update: Update, context: ContextTypes.DEFAULT_TYPE):
     print(f'Update (update) caused error {context.error}')
 
 
+
+
+
+
+
+
+
+# SCHEDULING MEETINGS AND SENDING REMINDERS
 # ------------====================================================================================-----------------
 # scheduling meeting
 def schedule_reminders(bot, job_queue):
@@ -422,19 +430,19 @@ async def send_reminder_message(context: ContextTypes.DEFAULT_TYPE):
 
     # Reminder message
     reminder_message = (
-        f"🚨 Monthly Meeting Alert for {team}! 🚨\n\n"
+        f"🚨 GENTLE REMINDER FOR {team} MONTHLY MEETING! 🚨\n\n"
         f"📅 Date: {data['meeting_time']:%A, %B %d, %Y}\n"
         f"🕒 Time: {data['meeting_time']:%I:%M %p}\n\n"
         f"👥 Attendees: {mentions}\n\n"
-        f"Please be on time. Thank you!"
+        f"{days_remaining} day(s) left to the meeting. Please be on time.\nThank you!"
     )
 
     try:
         # Send reminder to the team topic
         await context.bot.send_message(
-            chat_id="-1001898213670",  # Replace with your group chat ID
+            chat_id="-1001898213670",  # send the message to the group using group ID
             text=reminder_message,
-            message_thread_id=data["team_topic_id"]
+            message_thread_id=data["team_topic_id"] # sends message to specific topics in the group
         )
         print(f"Reminder sent for {team} meeting in topic {data['team_topic_id']}")
     except Exception as e:
@@ -458,59 +466,17 @@ async def send_meeting_message(context: ContextTypes.DEFAULT_TYPE):
         f"Please join in ⬇️⬇️\n"
         f"📅 Meeting Link: {data['meeting_link']}"
     )
-    
-    # meeting_message = (
-    #     f"🚨 Monthly Meeting Alert for {team}! 🚨\n\n"
-    #     f"📅 Date: {data['meeting_time']:%A, %B %d, %Y}\n"
-    #     f"🕒 Time: {data['meeting_time']:%I:%M %p}\n"
-    #     f"📍 Link: {data['meeting_link']}\n\n"
-    #     f"👥 Attendees: {mentions}\n\n"
-    #     f"Please be on time. Thank you!"
-    # )
 
     try:
         # Send meeting day message to the team topic
         await context.bot.send_message(
-            chat_id="-1001898213670",  # Replace with your group chat ID
-            text=meeting_message,
-            message_thread_id=data["team_topic_id"]
+            chat_id="-1001898213670",  # send the message to the group using group ID
+            text=message,
+            message_thread_id=data["team_topic_id"] # send message to specific topic(teams) in the group
         )
         print(f"Meeting message sent for {team} in topic {data['team_topic_id']}")
     except Exception as e:
         print(f"Failed to send meeting message for {team}: {e}")
-
-
-
-
-# Send reminder message
-# async def send_reminder(context: ContextTypes.DEFAULT_TYPE):
-#     job_data = context.job.data
-#     team = job_data["team"]
-#     data = job_data["data"]
-
-#     # Tag team members using their Telegram usernames
-#     mentions = " ".join(
-#         [f"@{member['username'][1:]}" for member in members if member['name'] in data["members"]]
-#     )
-
-#     message = (
-#         f"🚨 ALERT FOR {team} MEETING 🚨\n\n"
-#         f"🕒 Time: {data['meeting_time']}\n"
-#         f"📅 Meeting Link: {data['meeting_link']}\n\n"
-#         f"👥 Attendees: {mentions}"
-#     )
-
-#     try:
-#         # Send message to the specific topic
-#         await context.bot.send_message(
-#             chat_id="-1001898213670",  # Replace with your group chat ID
-#             text=message,
-#             message_thread_id=data["team_topic_id"],  # Send to the specific topic
-#             # parse_mode="Markdown",  # Enable bold and formatting
-#         )
-#         print(f"Reminder sent for {team} meeting in topic {data['team_topic_id']}")
-#     except Exception as e:
-#         print(f"Failed to send reminder for {team} meeting: {e}")
 
 
 
