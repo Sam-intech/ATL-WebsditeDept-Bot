@@ -66,16 +66,30 @@ now = datetime.now(nigeria_tz)
 # ----------------------------------------------------------------
 # Define teams with members, leaders, and meeting links
 teams_data = {
-    "Leadership Team": {
-        "leader": [member['name'] for member in members if member['leader'] ==  True],
-        "members": [member['name'] for member in members if member['teamlead'] == True or member['leader'] == True],
+    # "Leadership Team": {
+    #     "leader": [member['name'] for member in members if member['leader'] ==  True],
+    #     "members": [member['name'] for member in members if member['teamlead'] == True or member['leader'] == True],
+    #     "meeting_link": "https://meet.google.com/ohw-juya-xxd",
+    #     "meeting_time": get_meeting_date(now.year, now.month, weekday=4, week_index=1, time_of_day=dt_time(20, 0), timezone=nigeria_tz),  # First Friday
+    #     # "meeting_time": (datetime.now(nigeria_tz) + timedelta(seconds=5)).time(),  # Testing: 5 seconds
+    #     "team_topic_id": 5043  # Example topic ID
+    # },
+    "General Meeting": {
+        # "leader": [],  # No specific leaders for the general meeting
+        "members": [member['name'] for member in members],  # All members of the department
         "meeting_link": "https://meet.google.com/ohw-juya-xxd",
-        "meeting_time": get_meeting_date(now.year, now.month, weekday=4, week_index=1, time_of_day=dt_time(20, 0), timezone=nigeria_tz),  # First Friday
-        # "meeting_time": (datetime.now(nigeria_tz) + timedelta(seconds=5)).time(),  # Testing: 5 seconds
-        "team_topic_id": 5043  # Example topic ID
-
-
+        "meeting_time": get_meeting_date(
+            now.year,
+            now.month,
+            weekday=5,  # Saturday
+            week_index=-1,  # Last week of the month
+            time_of_day=dt_time(20, 0),  # 8 PM Nigerian time
+            timezone=nigeria_tz
+        ),
+        "team_topic_id": 5043  # Topic ID for General Meeting
     },
+
+
     "Design Team": {
         "leader": [member['name'] for member in members if member['team'] == "Design Team" and member['teamlead'] == True],
         "members": [member['name'] for member in members if member['team'] == "Design Team"],
@@ -383,33 +397,51 @@ async def error(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # SCHEDULING MEETINGS AND SENDING REMINDERS
 # ------------====================================================================================-----------------
 # scheduling meeting
+# def schedule_reminders(bot, job_queue):
+#     nigeria_tz = pytz.timezone('Africa/Lagos')
+
+#     for team, data in teams_data.items():
+#         # print(f"Processing team: {team}, Data: {data}")
+
+#         meeting_time = data.get("meeting_time")
+#         if not meeting_time:
+#             # print(f"No meeting time set for {team}. Skipping.")
+#             continue
+
+#         # Schedule reminders
+#         reminders = [
+#             ("1 week before", meeting_time - timedelta(days=7), send_reminder_message),
+#             ("2 days before", meeting_time - timedelta(days=2), send_reminder_message),
+#             ("6 hours before", meeting_time - timedelta(hours=6), send_reminder_message),
+#             ("5 minutes before", meeting_time, send_meeting_message)
+#         ]
+
+#         for desc, reminder_time, func in reminders:
+#             if reminder_time > datetime.now(nigeria_tz):  # Only schedule future events
+#                 job_queue.run_once(
+#                     func,
+#                     when=(reminder_time - datetime.now(nigeria_tz)).total_seconds(),
+#                     data={"team": team, "data": data},
+#                     name=f"{team}_{desc}",
+#                 )
 def schedule_reminders(bot, job_queue):
     nigeria_tz = pytz.timezone('Africa/Lagos')
 
     for team, data in teams_data.items():
-        # print(f"Processing team: {team}, Data: {data}")
-
         meeting_time = data.get("meeting_time")
         if not meeting_time:
-            # print(f"No meeting time set for {team}. Skipping.")
             continue
 
-        # Schedule reminders
-        reminders = [
-            ("1 week before", meeting_time - timedelta(days=7), send_reminder_message),
-            ("2 days before", meeting_time - timedelta(days=2), send_reminder_message),
-            ("6 hours before", meeting_time - timedelta(hours=6), send_reminder_message),
-            ("on meeting day", meeting_time, send_meeting_message)
-        ]
-
-        for desc, reminder_time, func in reminders:
-            if reminder_time > datetime.now(nigeria_tz):  # Only schedule future events
-                job_queue.run_once(
-                    func,
-                    when=(reminder_time - datetime.now(nigeria_tz)).total_seconds(),
-                    data={"team": team, "data": data},
-                    name=f"{team}_{desc}",
-                )
+        # Schedule the final meeting message 5 minutes before the meeting
+        final_message_time = meeting_time - timedelta(minutes=5)
+        if final_message_time > datetime.now(nigeria_tz):
+            job_queue.run_once(
+                send_meeting_message,
+                when=(final_message_time - datetime.now(nigeria_tz)).total_seconds(),
+                data={"team": team, "data": data},
+                name=f"{team}_final_message",
+            )
+            print(f"Scheduled final message for {team} at {final_message_time}")
 
 
 
@@ -461,7 +493,7 @@ async def send_meeting_message(context: ContextTypes.DEFAULT_TYPE):
     # Tag all team members
     mentions = " ".join([f"@{member.replace(' ', '_')}" for member in data["members"]])
     message = (
-        f"🚨 {team} MEETING STARTS 🚨\n\n"
+        f"🚨 {team} MEETING STARTS IN 5MINS 🚨\n\n"
         # f"🕒 Time: {data['meeting_time']}\n"
         f"👥 Attendees: {mentions}\n\n"
         f"Please join in ⬇️⬇️\n"
